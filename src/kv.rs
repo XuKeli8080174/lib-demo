@@ -32,5 +32,4 @@ impl KvStore {
     pub fn remove(&mut self, key: String) {
         self.map.remove(&key);
     }
-
 }

@@ -2,7 +2,6 @@ use std::process::exit;
 
 use clap::{Arg, Command};
 
-
 fn main() {
     let matches = Command::new(env!("CARGO_PKG_NAME"))
         .version(env!("CARGO_PKG_VERSION"))
@@ -23,13 +22,13 @@ fn main() {
         )
         .subcommand(
             Command::new("get")
-            .about("Get the string value of a given string key")
-            .arg(Arg::new("KEY").help("A string key").required(true)),
+                .about("Get the string value of a given string key")
+                .arg(Arg::new("KEY").help("A string key").required(true)),
         )
         .subcommand(
             Command::new("rm")
-            .about("Remove a given key")
-            .arg(Arg::new("KEY").help("A string key").required(true)),
+                .about("Remove a given key")
+                .arg(Arg::new("KEY").help("A string key").required(true)),
         )
         .get_matches();
 
