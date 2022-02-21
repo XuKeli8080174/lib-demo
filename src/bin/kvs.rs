@@ -1,8 +1,9 @@
-use std::process::exit;
+use std::{process::exit, env::current_dir};
 
 use clap::{Arg, Command};
+use kvs::{KvStore, KvsError, Result};
 
-fn main() {
+fn main() -> Result<()> {
     let matches = Command::new(env!("CARGO_PKG_NAME"))
         .version(env!("CARGO_PKG_VERSION"))
         .author(env!("CARGO_PKG_AUTHORS"))
@@ -33,18 +34,37 @@ fn main() {
         .get_matches();
 
     match matches.subcommand() {
-        Some(("set", _matches)) => {
-            eprintln!("unimplemented");
-            exit(1);
+        Some(("set", matches)) => {
+            let key = matches.value_of("KEY").unwrap();
+            let value = matches.value_of("VALUE").unwrap();
+            
+            let mut store = KvStore::open(current_dir()?)?;
+            store.set(key.to_string(), value.to_string())?;
         }
-        Some(("get", _matches)) => {
-            eprintln!("unimplemented");
-            exit(1);
+        Some(("get", matches)) => {
+            let key = matches.value_of("KEY").unwrap();
+
+            let mut store = KvStore::open(current_dir()?)?;
+            if let Some(value) = store.get(key.to_string())? {
+                println!("{}", value);
+            } else {
+                println!("Key not found");
+            }
         }
         Some(("rm", _matches)) => {
-            eprintln!("unimplemented");
-            exit(1);
+            let key = matches.value_of("KEY").unwrap();
+
+            let mut store = KvStore::open(current_dir()?)?;
+            match store.remove(key.to_string()) {
+                Ok(()) => {}
+                Err(KvsError::KeyNotFound) => {
+                    println!("Key not found");
+                    exit(1);
+                }
+                Err(e) => return Err(e),
+            }
         }
         _ => unreachable!(),
     }
+    Ok(())
 }
