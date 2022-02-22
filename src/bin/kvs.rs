@@ -1,7 +1,7 @@
-use std::{process::exit, env::current_dir};
+use std::{env::current_dir, process::exit};
 
 use clap::{Arg, Command};
-use kvs::{KvStore, KvsError, Result};
+use kvs::{KvStore, KvsError, Result, KvsEngine};
 
 fn main() -> Result<()> {
     let matches = Command::new(env!("CARGO_PKG_NAME"))
@@ -37,7 +37,7 @@ fn main() -> Result<()> {
         Some(("set", matches)) => {
             let key = matches.value_of("KEY").unwrap();
             let value = matches.value_of("VALUE").unwrap();
-            
+
             let mut store = KvStore::open(current_dir()?)?;
             store.set(key.to_string(), value.to_string())?;
         }
@@ -51,7 +51,7 @@ fn main() -> Result<()> {
                 println!("Key not found");
             }
         }
-        Some(("rm", _matches)) => {
+        Some(("rm", matches)) => {
             let key = matches.value_of("KEY").unwrap();
 
             let mut store = KvStore::open(current_dir()?)?;
