@@ -1,7 +1,7 @@
 use std::{env::current_dir, process::exit};
 
 use clap::{Arg, Command};
-use kvs::{KvStore, KvsError, Result, KvsEngine};
+use kvs::{KvStore, KvsEngine, KvsError, Result};
 
 fn main() -> Result<()> {
     let matches = Command::new(env!("CARGO_PKG_NAME"))

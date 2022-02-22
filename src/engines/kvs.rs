@@ -83,8 +83,6 @@ impl KvStore {
         })
     }
 
-    
-
     /// Clears stale entries in the log.
     pub fn compact(&mut self) -> Result<()> {
         // increase current gen by 2. current_gen + 1 is for the compaction file.

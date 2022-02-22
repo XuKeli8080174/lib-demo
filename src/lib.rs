@@ -8,6 +8,7 @@ pub use server::KvsServer;
 
 mod client;
 mod common;
-mod error;
 mod engines;
+mod error;
 mod server;
+pub mod thread_pool;

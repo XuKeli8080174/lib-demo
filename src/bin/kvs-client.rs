@@ -89,7 +89,7 @@ fn run(opt: Opt) -> Result<()> {
             let mut client = KvsClient::connect(addr)?;
             client.remove(key)?;
         }
-        _ => unreachable!()
+        _ => unreachable!(),
     }
     Ok(())
 }

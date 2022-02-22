@@ -8,7 +8,7 @@ use std::str::FromStr;
 
 use clap::{ArgEnum, Parser};
 
-use kvs::{KvStore, KvsEngine, Result, SledKvsEngine, KvsServer};
+use kvs::{KvStore, KvsEngine, KvsServer, Result, SledKvsEngine};
 
 const DEFAULT_LISTENING_ADDRESS: &str = "127.0.0.1:4000";
 const DEFAULT_ENGINE: Engine = Engine::kvs;
