@@ -1,3 +1,4 @@
+use kvs::thread_pool::{NaiveThreadPool, ThreadPool};
 use log::LevelFilter;
 use log::{error, info, warn};
 use std::env::current_dir;
@@ -32,6 +33,14 @@ struct Opt {
         value_name = "ENGINE-NAME"
     )]
     engine: Option<Engine>,
+    #[clap(
+        arg_enum,
+        long,
+        help = "Sets the thread pool",
+        value_name = "THREAD-POOL",
+        default_value_t = Pool::native,
+    )]
+    pool: Pool,
 }
 
 #[allow(non_camel_case_types)]
@@ -39,6 +48,14 @@ struct Opt {
 enum Engine {
     kvs,
     sled,
+}
+
+#[allow(non_camel_case_types)]
+#[derive(ArgEnum, Debug, Copy, Clone, PartialEq, Eq)]
+enum Pool {
+    native,
+    rayon,
+    shared_queue,
 }
 
 impl FromStr for Engine {
@@ -76,19 +93,34 @@ fn run(opt: Opt) -> Result<()> {
     let engine = opt.engine.unwrap_or(DEFAULT_ENGINE);
     info!("kvs-server {}", env!("CARGO_PKG_VERSION"));
     info!("Storage engine: {:?}", engine);
+    info!("Thread pool: {:?}", opt.pool);
     info!("Listening on {}", opt.addr);
 
     // write engine to engine file
     fs::write(current_dir()?.join("engine"), format!("{:?}", engine))?;
 
+    let pool = match opt.pool {
+        Pool::native => NaiveThreadPool::new(num_cpus::get() as u32)?,
+        Pool::rayon => unimplemented!(),
+        Pool::shared_queue => unimplemented!(),
+    };
+
     match engine {
-        Engine::kvs => run_with_engine(KvStore::open(current_dir()?)?, opt.addr),
-        Engine::sled => run_with_engine(SledKvsEngine::new(sled::open(current_dir()?)?), opt.addr),
+        Engine::kvs => run_with_engine(KvStore::open(current_dir()?)?, pool, opt.addr),
+        Engine::sled => run_with_engine(
+            SledKvsEngine::new(sled::open(current_dir()?)?),
+            pool,
+            opt.addr,
+        ),
     }
 }
 
-fn run_with_engine<E: KvsEngine>(engine: E, addr: SocketAddr) -> Result<()> {
-    let server = KvsServer::new(engine);
+fn run_with_engine<E: KvsEngine, P: ThreadPool>(
+    engine: E,
+    pool: P,
+    addr: SocketAddr,
+) -> Result<()> {
+    let server = KvsServer::new(engine, pool);
     server.run(addr)
 }
 
