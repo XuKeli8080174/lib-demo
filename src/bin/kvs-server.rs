@@ -1,4 +1,4 @@
-use kvs::thread_pool::{NaiveThreadPool, ThreadPool};
+use kvs::thread_pool::{NaiveThreadPool, ThreadPool, RayonThreadPool, SharedQueueThreadPool};
 use log::LevelFilter;
 use log::{error, info, warn};
 use std::env::current_dir;
@@ -99,29 +99,33 @@ fn run(opt: Opt) -> Result<()> {
     // write engine to engine file
     fs::write(current_dir()?.join("engine"), format!("{:?}", engine))?;
 
-    let pool = match opt.pool {
-        Pool::native => NaiveThreadPool::new(num_cpus::get() as u32)?,
-        Pool::rayon => unimplemented!(),
-        Pool::shared_queue => unimplemented!(),
-    };
+    let concurrency = num_cpus::get() as u32;
+    match opt.pool {
+        Pool::native => run_with::<NaiveThreadPool>(engine, &opt, concurrency),
+        Pool::rayon => run_with::<RayonThreadPool>(engine, &opt, concurrency),
+        Pool::shared_queue => run_with::<SharedQueueThreadPool>(engine, &opt, concurrency),
+    }
+}
 
+fn run_with<P: ThreadPool>(engine: Engine, opt: &Opt, concurrency: u32) -> Result<()> {
     match engine {
-        Engine::kvs => run_with_engine(KvStore::open(current_dir()?)?, pool, opt.addr),
+        Engine::kvs => run_with_engine(KvStore::<P>::open(current_dir()?, concurrency)?, opt.addr),
         Engine::sled => run_with_engine(
-            SledKvsEngine::new(sled::open(current_dir()?)?),
-            pool,
+            SledKvsEngine::<P>::new(sled::open(current_dir()?)?, concurrency)?,
             opt.addr,
         ),
     }
 }
 
-fn run_with_engine<E: KvsEngine, P: ThreadPool>(
+fn run_with_engine<E: KvsEngine>(
     engine: E,
-    pool: P,
     addr: SocketAddr,
 ) -> Result<()> {
-    let server = KvsServer::new(engine, pool);
-    server.run(addr)
+    let server = KvsServer::new(engine);
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        server.run(addr).await
+    })
 }
 
 fn current_engine() -> Result<Option<Engine>> {

@@ -63,31 +63,33 @@ enum Command {
     },
 }
 
-fn main() {
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> Result<()> {
     let opt = Opt::parse();
-    if let Err(e) = run(opt) {
+    if let Err(e) = run(opt).await {
         eprintln!("{}", e);
         exit(1);
     }
+    Ok(())
 }
 
-fn run(opt: Opt) -> Result<()> {
+async fn run(opt: Opt) -> Result<()> {
     match opt.command {
         Some(Command::Get { key, addr }) => {
-            let mut client = KvsClient::connect(addr)?;
-            if let Some(value) = client.get(key)? {
+            let mut client = KvsClient::connect(addr).await?;
+            if let Some(value) = client.get(key).await? {
                 println!("{}", value);
             } else {
                 println!("Key not found");
             }
         }
         Some(Command::Set { key, value, addr }) => {
-            let mut client = KvsClient::connect(addr)?;
-            client.set(key, value)?;
+            let mut client = KvsClient::connect(addr).await?;
+            client.set(key, value).await?;
         }
         Some(Command::Remove { key, addr }) => {
-            let mut client = KvsClient::connect(addr)?;
-            client.remove(key)?;
+            let mut client = KvsClient::connect(addr).await?;
+            client.remove(key).await?;
         }
         _ => unreachable!(),
     }

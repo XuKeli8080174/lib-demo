@@ -1,9 +1,10 @@
 use std::{env::current_dir, process::exit};
 
 use clap::{Arg, Command};
-use kvs::{KvStore, KvsEngine, KvsError, Result};
+use kvs::{KvStore, KvsEngine, KvsError, Result, thread_pool::NaiveThreadPool};
 
-fn main() -> Result<()> {
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> Result<()> {
     let matches = Command::new(env!("CARGO_PKG_NAME"))
         .version(env!("CARGO_PKG_VERSION"))
         .author(env!("CARGO_PKG_AUTHORS"))
@@ -33,19 +34,20 @@ fn main() -> Result<()> {
         )
         .get_matches();
 
+    let num = num_cpus::get() as u32;
     match matches.subcommand() {
         Some(("set", matches)) => {
             let key = matches.value_of("KEY").unwrap();
             let value = matches.value_of("VALUE").unwrap();
 
-            let store = KvStore::open(current_dir()?)?;
-            store.set(key.to_string(), value.to_string())?;
+            let store = KvStore::<NaiveThreadPool>::open(current_dir()?, num)?;
+            store.set(key.to_string(), value.to_string()).await?;
         }
         Some(("get", matches)) => {
             let key = matches.value_of("KEY").unwrap();
 
-            let store = KvStore::open(current_dir()?)?;
-            if let Some(value) = store.get(key.to_string())? {
+            let store = KvStore::<NaiveThreadPool>::open(current_dir()?, num)?;
+            if let Some(value) = store.get(key.to_string()).await? {
                 println!("{}", value);
             } else {
                 println!("Key not found");
@@ -54,8 +56,8 @@ fn main() -> Result<()> {
         Some(("rm", matches)) => {
             let key = matches.value_of("KEY").unwrap();
 
-            let store = KvStore::open(current_dir()?)?;
-            match store.remove(key.to_string()) {
+            let store = KvStore::<NaiveThreadPool>::open(current_dir()?, num)?;
+            match store.remove(key.to_string()).await {
                 Ok(()) => {}
                 Err(KvsError::KeyNotFound) => {
                     println!("Key not found");
