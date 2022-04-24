@@ -1,7 +1,7 @@
 use std::{env::current_dir, process::exit};
 
 use clap::{Arg, Command};
-use kvs::{KvStore, KvsEngine, KvsError, Result, thread_pool::NaiveThreadPool};
+use kvs::{thread_pool::NaiveThreadPool, KvStore, KvsEngine, KvsError, Result};
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {

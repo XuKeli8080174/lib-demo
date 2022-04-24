@@ -1,10 +1,6 @@
-use bytes::Buf;
-
 #[test]
 fn lib_bytes() {
-    let mut buf = &b"hello"[..];
-    let mut buf_bytes: Buf = buf;
-    println!(buf_bytes);
+    let mut _buf = &b"hello"[..];
 }
 
 #[test]

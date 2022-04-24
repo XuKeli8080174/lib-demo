@@ -3,7 +3,7 @@ use std::{future::Future, pin::Pin};
 use super::KvsEngine;
 use crate::{thread_pool::ThreadPool, KvsError, Result};
 use log::error;
-use sled::{Db};
+use sled::Db;
 use tokio::sync::oneshot;
 
 /// Wrapper of `sled::Db`
@@ -22,7 +22,7 @@ impl<P: ThreadPool> SledKvsEngine<P> {
 }
 
 impl<P: ThreadPool> KvsEngine for SledKvsEngine<P> {
-    fn set(&self, key: String, value: String) -> Pin<Box<dyn Future<Output = Result<()>>>> {
+    fn set(&self, key: String, value: String) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
         let db = self.db.clone();
         let (tx, rx) = oneshot::channel();
         self.pool.spawn(move || {
@@ -44,15 +44,16 @@ impl<P: ThreadPool> KvsEngine for SledKvsEngine<P> {
         Box::pin(fut)
     }
 
-    fn get(&self, key: String) -> Pin<Box<dyn Future<Output = Result<Option<String>>>>> {
+    fn get(&self, key: String) -> Pin<Box<dyn Future<Output = Result<Option<String>>> + Send>> {
         let db = self.db.clone();
         let (tx, rx) = oneshot::channel();
         self.pool.spawn(move || {
             let res = (move || {
-                Ok(db.get(key)?
-                .map(|i_vec| AsRef::<[u8]>::as_ref(&i_vec).to_vec())
-                .map(String::from_utf8)
-                .transpose()?)
+                Ok(db
+                    .get(key)?
+                    .map(|i_vec| AsRef::<[u8]>::as_ref(&i_vec).to_vec())
+                    .map(String::from_utf8)
+                    .transpose()?)
             })();
             if tx.send(res).is_err() {
                 error!("Receiving end is dropped");
@@ -67,7 +68,7 @@ impl<P: ThreadPool> KvsEngine for SledKvsEngine<P> {
         Box::pin(fut)
     }
 
-    fn remove(&self, key: String) -> Pin<Box<dyn Future<Output = Result<()>>>> {
+    fn remove(&self, key: String) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
         let db = self.db.clone();
         let (tx, rx) = oneshot::channel();
         self.pool.spawn(move || {

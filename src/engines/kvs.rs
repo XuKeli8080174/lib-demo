@@ -3,13 +3,15 @@ use std::{
     collections::BTreeMap,
     ffi::OsStr,
     fs::{self, File, OpenOptions},
+    future::Future,
     io::{self, BufReader, BufWriter, Read, Seek, SeekFrom, Write},
     ops::Range,
     path::{Path, PathBuf},
+    pin::Pin,
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc, Mutex,
-    }, future::Future, pin::Pin,
+    },
 };
 
 use crossbeam::queue::ArrayQueue;
@@ -20,7 +22,7 @@ use serde_json::Deserializer;
 use tokio::sync::oneshot;
 
 use super::KvsEngine;
-use crate::{KvsError, Result, thread_pool::ThreadPool};
+use crate::{thread_pool::ThreadPool, KvsError, Result};
 
 const COMPACTION_THRESHOLD: u64 = 1024 * 1024;
 
@@ -59,7 +61,7 @@ impl<P: ThreadPool> KvStore<P> {
     /// This will create a new directory if the given one does not exist.
     ///
     /// `concurrency` specifies how many threads at most can read the database at the same time.
-    /// 
+    ///
     /// # Errors
     ///
     /// It propagates I/O or deserialization errors during the log replay.
@@ -102,11 +104,15 @@ impl<P: ThreadPool> KvStore<P> {
         let reader_pool = Arc::new(ArrayQueue::new(concurrency as usize));
         for _ in 0..concurrency {
             if let Err(_) = reader_pool.push(reader.clone()) {
-                return Err(KvsError::StringError("push reader to pool error".to_owned()));
+                return Err(KvsError::StringError(
+                    "push reader to pool error".to_owned(),
+                ));
             }
         }
         if let Err(_) = reader_pool.push(reader) {
-            return Err(KvsError::StringError("push reader to pool error".to_owned()));
+            return Err(KvsError::StringError(
+                "push reader to pool error".to_owned(),
+            ));
         }
 
         Ok(KvStore {
@@ -127,7 +133,7 @@ impl<P: ThreadPool> KvsEngine for KvStore<P> {
     /// # Errors
     ///
     /// It propagates I/O or serialization errors during writing the log.
-    fn set(&self, key: String, value: String) -> Pin<Box<dyn Future<Output = Result<()>>>> {
+    fn set(&self, key: String, value: String) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
         let writer = self.writer.clone();
         let (tx, rx) = oneshot::channel();
         self.thread_pool.spawn(move || {
@@ -139,18 +145,16 @@ impl<P: ThreadPool> KvsEngine for KvStore<P> {
         let fut = async move {
             match rx.await {
                 Ok(ret) => ret,
-                Err(e) => Err(KvsError::StringError("tokio recv error".to_owned())),
+                Err(_e) => Err(KvsError::StringError("tokio recv error".to_owned())),
             }
         };
-        Box::pin(
-            fut
-        )
+        Box::pin(fut)
     }
 
     /// Gets the string value of a given string key.
     ///
     /// Returns `None` if the given key does not exist.
-    fn get(&self, key: String) -> Pin<Box<dyn Future<Output = Result<Option<String>>>>> {
+    fn get(&self, key: String) -> Pin<Box<dyn Future<Output = Result<Option<String>>> + Send>> {
         let reader_pool = self.reader_pool.clone();
         let index = self.index.clone();
         let (tx, rx) = oneshot::channel();
@@ -165,7 +169,7 @@ impl<P: ThreadPool> KvsEngine for KvStore<P> {
                     } else {
                         Err(KvsError::UnexpectedCommandType)
                     };
-                    reader_pool.push(reader);
+                    reader_pool.push(reader).unwrap();
                     res
                 } else {
                     Ok(None)
@@ -178,12 +182,10 @@ impl<P: ThreadPool> KvsEngine for KvStore<P> {
         let fut = async move {
             match rx.await {
                 Ok(ret) => ret,
-                Err(e) => Err(KvsError::StringError("tokio recv error".to_owned())),
+                Err(_e) => Err(KvsError::StringError("tokio recv error".to_owned())),
             }
         };
-        Box::pin(
-            fut
-        )
+        Box::pin(fut)
     }
 
     /// Removes a given key.
@@ -193,7 +195,7 @@ impl<P: ThreadPool> KvsEngine for KvStore<P> {
     /// It returns `KvsError::KeyNotFound` if the given key is not found.
     ///
     /// It propagates I/O or serialization errors during writing the log.
-    fn remove(&self, key: String) -> Pin<Box<dyn Future<Output = Result<()>>>> {
+    fn remove(&self, key: String) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
         let writer = self.writer.clone();
         let (tx, rx) = oneshot::channel();
         self.thread_pool.spawn(move || {
@@ -205,12 +207,10 @@ impl<P: ThreadPool> KvsEngine for KvStore<P> {
         let fut = async move {
             match rx.await {
                 Ok(ret) => ret,
-                Err(e) => Err(KvsError::StringError("tokio recv error".to_owned())),
+                Err(_e) => Err(KvsError::StringError("tokio recv error".to_owned())),
             }
         };
-        Box::pin(
-            fut
-        )
+        Box::pin(fut)
     }
 }
 
@@ -220,6 +220,7 @@ impl<P: ThreadPool> KvsEngine for KvStore<P> {
 /// `KvStoreReader`s open the same files separately. So the user
 /// can read concurrently through multiple `KvStore`s in different
 /// threads.
+#[derive(Debug)]
 struct KvStoreReader {
     path: Arc<PathBuf>,
     // generation of the latest compaction file
@@ -492,6 +493,7 @@ impl From<(u64, Range<u64>)> for CommandPos {
     }
 }
 
+#[derive(Debug)]
 struct BufReaderWithPos<R: Read + Seek> {
     reader: BufReader<R>,
     pos: u64,

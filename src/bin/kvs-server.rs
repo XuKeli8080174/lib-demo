@@ -1,4 +1,4 @@
-use kvs::thread_pool::{NaiveThreadPool, ThreadPool, RayonThreadPool, SharedQueueThreadPool};
+use kvs::thread_pool::{NaiveThreadPool, RayonThreadPool, SharedQueueThreadPool, ThreadPool};
 use log::LevelFilter;
 use log::{error, info, warn};
 use std::env::current_dir;
@@ -117,15 +117,10 @@ fn run_with<P: ThreadPool>(engine: Engine, opt: &Opt, concurrency: u32) -> Resul
     }
 }
 
-fn run_with_engine<E: KvsEngine>(
-    engine: E,
-    addr: SocketAddr,
-) -> Result<()> {
+fn run_with_engine<E: KvsEngine>(engine: E, addr: SocketAddr) -> Result<()> {
     let server = KvsServer::new(engine);
     let rt = tokio::runtime::Runtime::new().unwrap();
-    rt.block_on(async {
-        server.run(addr).await
-    })
+    rt.block_on(async { server.run(addr).await })
 }
 
 fn current_engine() -> Result<Option<Engine>> {
