@@ -42,6 +42,10 @@ tempfile = "3"
 walkdir = "2"
 panic-control = "0.1.4"
 
+[build-dependencies]
+cc = { version = "1", features = ["parallel"] }
+pkg-config = "0.3.25"
+
 [[bench]]
 name = "engine_bench"
 harness = false

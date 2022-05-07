@@ -15,5 +15,7 @@ pub mod server;
 pub mod thread_pool;
 mod connection;
 mod data_struct;
+/// interactive with naive library and C header file
+pub mod ffi_test;
 
-extern crate libc;
+
