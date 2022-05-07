@@ -4,12 +4,16 @@
 pub use client::KvsClient;
 pub use engines::{KvStore, KvsEngine, SledKvsEngine};
 pub use error::{KvsError, Result};
-pub use server::KvsServer;
+pub use data_struct::{SafeDeque, UnsafeList, LibVec, Arc};
 
 mod client;
 mod common;
 mod engines;
 mod error;
-mod server;
+/// 为什么
+pub mod server;
 pub mod thread_pool;
 mod connection;
+mod data_struct;
+
+extern crate libc;

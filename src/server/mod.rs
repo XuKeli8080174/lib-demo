@@ -1,23 +1,69 @@
 use crate::{KvsEngine, Result, connection::Connection, common::{Request, Response}};
-use std::net::SocketAddr;
-use tokio::net::{TcpListener, TcpStream};
+use std::{net::SocketAddr, sync::Arc};
+use log::{error, info};
+use tokio::{net::{TcpListener, TcpStream}, sync::{Semaphore, broadcast, mpsc}, signal};
+
+const MAX_CONNECTIONS: usize = 250;
+
+/// run the server
+pub async fn run<E: KvsEngine>(listener: TcpListener, engine: E) {
+    let mut server = KvsServer::new(engine, listener);
+
+    tokio::select! {
+        ret = server.run() => {
+            if let Err(err) = ret {
+                error!("failed to accept, err: {}", err);
+            }
+        }
+        _ = signal::ctrl_c() => {
+            info!("shutting down");
+        }
+    }
+
+    let KvsServer {
+        mut shutdown_complete_rx,
+        shutdown_complete_tx,
+        notify_shutdown,
+        ..
+    } = server;
+
+    drop(notify_shutdown);
+    drop(shutdown_complete_tx);
+
+    let _ = shutdown_complete_rx.recv().await;
+}
 
 /// The server of a key value store.
 pub struct KvsServer<E: KvsEngine> {
+    listener: TcpListener,
     engine: E,
+    limit_connections: Arc<Semaphore>,
+    notify_shutdown: broadcast::Sender<()>,
+    shutdown_complete_rx: mpsc::Receiver<()>,
+    shutdown_complete_tx: mpsc::Sender<()>,
 }
 
 impl<E: KvsEngine> KvsServer<E> {
     /// Create a `KvsServer` with a given storage engine.
-    pub fn new(engine: E) -> Self {
-        KvsServer { engine }
+    pub fn new(engine: E, listener: TcpListener) -> Self {
+        let (notify_shutdown, _) = broadcast::channel(1);
+        let (shutdown_complete_tx, shutdown_complete_rx) = mpsc::channel(1);
+
+        KvsServer {
+            listener,
+            engine,
+            limit_connections: Arc::new(Semaphore::new(MAX_CONNECTIONS)),
+            notify_shutdown,
+            shutdown_complete_tx,
+            shutdown_complete_rx,
+        }
     }
 
     /// Run the server listening on the given address
-    pub async fn run(self, addr: SocketAddr) -> Result<()> {
-        let listener = TcpListener::bind(&addr).await?;
+    pub async fn run(&mut self) -> Result<()> {
         loop {
-            let (tcp, peer_addr) = listener.accept().await?;
+            self.limit_connections.acquire().await.unwrap().forget();
+            let (tcp, peer_addr) = self.listener.accept().await?;
             let engine = self.engine.clone();
             serve(engine, tcp, peer_addr);
         }

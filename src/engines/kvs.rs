@@ -103,13 +103,13 @@ impl<P: ThreadPool> KvStore<P> {
         let thread_pool = P::new(concurrency)?;
         let reader_pool = Arc::new(ArrayQueue::new(concurrency as usize));
         for _ in 0..concurrency {
-            if let Err(_) = reader_pool.push(reader.clone()) {
+            if reader_pool.push(reader.clone()).is_err() {
                 return Err(KvsError::StringError(
                     "push reader to pool error".to_owned(),
                 ));
             }
         }
-        if let Err(_) = reader_pool.push(reader) {
+        if reader_pool.push(reader).is_err() {
             return Err(KvsError::StringError(
                 "push reader to pool error".to_owned(),
             ));

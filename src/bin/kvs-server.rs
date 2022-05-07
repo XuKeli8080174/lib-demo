@@ -1,6 +1,7 @@
 use kvs::thread_pool::{NaiveThreadPool, RayonThreadPool, SharedQueueThreadPool, ThreadPool};
 use log::LevelFilter;
 use log::{error, info, warn};
+use tokio::{net::TcpListener};
 use std::env::current_dir;
 use std::fs;
 use std::net::SocketAddr;
@@ -9,7 +10,7 @@ use std::str::FromStr;
 
 use clap::{ArgEnum, Parser};
 
-use kvs::{KvStore, KvsEngine, KvsServer, Result, SledKvsEngine};
+use kvs::{server, KvStore, KvsEngine, Result, SledKvsEngine};
 
 const DEFAULT_LISTENING_ADDRESS: &str = "127.0.0.1:4000";
 const DEFAULT_ENGINE: Engine = Engine::kvs;
@@ -118,9 +119,12 @@ fn run_with<P: ThreadPool>(engine: Engine, opt: &Opt, concurrency: u32) -> Resul
 }
 
 fn run_with_engine<E: KvsEngine>(engine: E, addr: SocketAddr) -> Result<()> {
-    let server = KvsServer::new(engine);
     let rt = tokio::runtime::Runtime::new().unwrap();
-    rt.block_on(async { server.run(addr).await })
+    rt.block_on(async {
+        let listener = TcpListener::bind(&addr).await?;
+        server::run(listener, engine).await;
+        Ok(())
+    })
 }
 
 fn current_engine() -> Result<Option<Engine>> {
